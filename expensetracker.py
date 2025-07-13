@@ -1,8 +1,9 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
-import tkinter.font as tkFont
 import json
 from datetime import datetime
+import pandas as pd
+import matplotlib.pyplot as plt
 
 
 class ExpenseTrackerApp:
@@ -101,7 +102,10 @@ class ExpenseTrackerApp:
         self.remaining_budget_label.grid(row=3, column=0, sticky=tk.W, pady=2)
 
         # Save Button
-        ttk.Button(display_frame, text="save data", command=self.save_data).grid(row=4, column=0, pady=10)
+        ttk.Button(display_frame, text="save data", command=self.save_data).grid(row=5, column=3, pady=10)
+
+        # Generate JSON report
+        ttk.Button(display_frame, text="generate report", command=self.generate_report).grid(row=5, column=0, pady=5)
 
         # Configure grid
         self.root.columnconfigure(0, weight=1)
@@ -215,6 +219,64 @@ class ExpenseTrackerApp:
             with open(file_path, 'w') as f:
                 json.dump(data, f, indent=2)
             messagebox.showinfo("saved!", f"data saved to {file_path}")
+
+    def generate_report(self):
+        file_path = filedialog.askopenfilename(
+            filetypes=[("JSON files", "*.json")],
+            title="select JSON file"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, "r") as f:
+                data = json.load(f)
+                expenses = data.get("expenses", [])
+
+            if not expenses:
+                messagebox.showwarning("no data", "no expenses found in this file.")
+                return
+
+            df = pd.DataFrame(expenses)
+            df['date'] = pd.to_datetime(df['date'], errors='coerce')
+            df = df.dropna(subset=['date'])  # Drop invalid dates
+
+            # Summary calculations
+            total_spent = df['amount'].sum()
+            category_summary = df.groupby("category")["amount"].sum().sort_values(ascending=False)
+            df['month'] = df['date'].dt.to_period('M')
+            monthly_summary = df.groupby("month")["amount"].sum()
+
+            # Console print (optional)
+            print(f"📊 total spent: ${total_spent:.2f}")
+            print("\n📂 spending by category:")
+            print(category_summary)
+            print("\n🗓️ monthly spending:")
+            print(monthly_summary)
+
+            # Plot Pie Chart
+            category_summary.plot.pie(
+                autopct='%1.1f%%',
+                startangle=90,
+                figsize=(6, 6),
+                title="spending by category"
+            )
+            plt.ylabel('')
+            plt.show()
+
+            monthly_summary.plot.bar(
+                title="monthly spending",
+                xlabel="month",
+                ylabel="total spent",
+                color='skyblue'
+            )
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            plt.show()
+
+        except Exception as e:
+            messagebox.showerror("error!", f"failed to generate report:\n{str(e)}")
 
 
 if __name__ == "__main__":
